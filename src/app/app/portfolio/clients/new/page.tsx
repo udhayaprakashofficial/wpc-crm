@@ -13,7 +13,7 @@ export default async function NewPortfolioClientPage() {
   const ctx = await requireTenant();
   const limits = await getBusinessPlanLimits(ctx.businessId);
   if (!hasFeature(limits, "portfolioWrite")) {
-    redirect("/app/settings/billing");
+    redirect("/pay");
   }
 
   return (

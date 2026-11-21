@@ -1,102 +1,173 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { activateBusinessPlan } from "@/lib/billing-activate";
 import {
-  appBaseUrl,
-  dodoConfigured,
-  envProductIdForPlan,
-  getDodoClient,
-} from "@/lib/dodo";
-/** Downgrade / select Free locally (no payment). */
-export async function changePlan(formData: FormData) {
+  envRazorpayPlanId,
+  getRazorpayClient,
+  razorpayConfigured,
+  razorpayKeyId,
+  totalCountForPlan,
+  verifySubscriptionPaymentSignature,
+} from "@/lib/razorpay";
+
+export type RazorpayCheckoutPayload = {
+  keyId: string;
+  subscriptionId: string;
+  planCode: string;
+  planName: string;
+  businessName: string;
+  customerName: string;
+  customerEmail: string;
+};
+
+/** Create a Razorpay subscription and return checkout payload for the client. */
+export async function createRazorpaySubscription(
+  planCode: string,
+): Promise<RazorpayCheckoutPayload> {
   const ctx = await requireTenant();
-  if (ctx.role !== "OWNER") throw new Error("Only owners can change plans");
+  if (ctx.role !== "OWNER") throw new Error("Only owners can subscribe");
 
-  const planCode = String(formData.get("planCode") || "");
-  const plan = await prisma.plan.findUnique({ where: { code: planCode } });
-  if (!plan || !plan.active) throw new Error("Plan not found");
-
-  // Paid plans must go through Dodo checkout
-  if (plan.pricePaise > 0) {
-    throw new Error("Use Pay with Dodo for paid plans");
+  if (!razorpayConfigured()) {
+    throw new Error(
+      "Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+    );
   }
 
-  await activateBusinessPlan({
-    businessId: ctx.businessId,
-    planCode: plan.code,
-  });
-
-  revalidatePath("/app/settings/billing");
-  revalidatePath("/app");
-}
-
-/** Start Dodo hosted checkout for a paid plan. */
-export async function startDodoCheckout(formData: FormData) {
-  const ctx = await requireTenant();
-  if (ctx.role !== "OWNER") throw new Error("Only owners can upgrade");
-
-  const planCode = String(formData.get("planCode") || "");
   const plan = await prisma.plan.findUnique({ where: { code: planCode } });
   if (!plan || !plan.active || plan.pricePaise <= 0) {
     throw new Error("Invalid paid plan");
   }
 
-  if (!dodoConfigured()) {
+  const rzPlanId =
+    plan.razorpayPlanId?.trim() || envRazorpayPlanId(plan.code);
+  if (!rzPlanId) {
     throw new Error(
-      "Dodo Payments is not configured. Add DODO_PAYMENTS_API_KEY to .env",
-    );
-  }
-
-  const productId =
-    plan.dodoProductId?.trim() || envProductIdForPlan(plan.code);
-  if (!productId) {
-    throw new Error(
-      `Missing Dodo product id for ${plan.code}. Set DODO_PRODUCT_PAID_YEARLY in .env (or Plan.dodoProductId).`,
+      `Missing Razorpay plan id for ${plan.code}. Set RAZORPAY_PLAN_MONTHLY / RAZORPAY_PLAN_YEARLY.`,
     );
   }
 
   const business = await prisma.business.findUniqueOrThrow({
     where: { id: ctx.businessId },
-    select: { name: true, email: true, phone: true },
+    select: { name: true, email: true },
   });
 
-  const client = getDodoClient();
-  const returnUrl = `${appBaseUrl()}/app/settings/billing/success`;
+  const client = getRazorpayClient();
+  let subscription: { id: string };
+  try {
+    subscription = await client.subscriptions.create({
+      plan_id: rzPlanId,
+      total_count: totalCountForPlan(plan.intervalMonths),
+      quantity: 1,
+      customer_notify: true,
+      notes: {
+        businessId: ctx.businessId,
+        planCode: plan.code,
+        userId: ctx.user.id,
+      },
+    });
+  } catch (e) {
+    const description =
+      e && typeof e === "object" && "error" in e
+        ? String(
+            (e as { error?: { description?: string } }).error?.description ||
+              "",
+          )
+        : e instanceof Error
+          ? e.message
+          : "Could not create subscription";
+    throw new Error(
+      description ||
+        "Could not create Razorpay subscription. Check plan_id matches your API keys.",
+    );
+  }
 
-  const session = await client.checkoutSessions.create({
-    product_cart: [{ product_id: productId, quantity: 1 }],
-    customer: {
-      email: ctx.user.email,
-      name: ctx.user.name || business.name,
-      ...(business.phone ? { phone_number: business.phone } : {}),
-    },
-    return_url: returnUrl,
-    metadata: {
-      businessId: ctx.businessId,
-      planCode: plan.code,
-      userId: ctx.user.id,
-    },
-  });
-
-  // Remember checkout attempt on current subscription row (if any)
   const existing = await prisma.subscription.findFirst({
     where: { businessId: ctx.businessId },
     orderBy: { createdAt: "desc" },
   });
-  if (existing && session.session_id) {
+  if (existing) {
     await prisma.subscription.update({
       where: { id: existing.id },
-      data: { dodoCheckoutSessionId: session.session_id },
+      data: { razorpaySubscriptionId: subscription.id },
+    });
+  } else {
+    await prisma.subscription.create({
+      data: {
+        businessId: ctx.businessId,
+        planId: plan.id,
+        status: "PAST_DUE",
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(),
+        razorpaySubscriptionId: subscription.id,
+      },
     });
   }
 
-  if (!session.checkout_url) {
-    throw new Error("Dodo did not return a checkout URL");
+  return {
+    keyId: razorpayKeyId(),
+    subscriptionId: subscription.id,
+    planCode: plan.code,
+    planName: plan.name,
+    businessName: business.name,
+    customerName: ctx.user.name || business.name,
+    customerEmail: ctx.user.email,
+  };
+}
+
+/** Verify Checkout signature and activate the plan. */
+export async function verifyRazorpaySubscription(input: {
+  razorpay_payment_id: string;
+  razorpay_subscription_id: string;
+  razorpay_signature: string;
+  planCode: string;
+}) {
+  const ctx = await requireTenant();
+  if (ctx.role !== "OWNER") throw new Error("Only owners can subscribe");
+
+  const ok = verifySubscriptionPaymentSignature({
+    paymentId: input.razorpay_payment_id,
+    subscriptionId: input.razorpay_subscription_id,
+    signature: input.razorpay_signature,
+  });
+  if (!ok) throw new Error("Payment signature verification failed");
+
+  await activateBusinessPlan({
+    businessId: ctx.businessId,
+    planCode: input.planCode,
+    razorpaySubscriptionId: input.razorpay_subscription_id,
+  });
+
+  revalidatePath("/app/settings/billing");
+  revalidatePath("/pay");
+  revalidatePath("/app");
+  return { ok: true as const };
+}
+
+/** Cancel at period end (Cancel anytime). */
+export async function cancelSubscriptionAtPeriodEnd() {
+  const ctx = await requireTenant();
+  if (ctx.role !== "OWNER") throw new Error("Only owners can cancel");
+
+  const sub = await prisma.subscription.findFirst({
+    where: { businessId: ctx.businessId, status: "ACTIVE" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!sub) throw new Error("No active subscription");
+
+  if (sub.razorpaySubscriptionId && razorpayConfigured()) {
+    const client = getRazorpayClient();
+    await client.subscriptions.cancel(sub.razorpaySubscriptionId, true);
   }
 
-  redirect(session.checkout_url);
+  await prisma.subscription.update({
+    where: { id: sub.id },
+    data: { cancelAtPeriodEnd: true },
+  });
+
+  revalidatePath("/app/settings/billing");
+  revalidatePath("/pay");
+  revalidatePath("/app");
 }

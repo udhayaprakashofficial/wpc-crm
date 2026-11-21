@@ -1,4 +1,5 @@
 import { ReactNode, Suspense } from "react";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { AppShell } from "@/components/layout/AppShell";
@@ -19,6 +20,11 @@ async function Shell({ children }: { children: ReactNode }) {
     getBusinessPlanLimits(ctx.businessId),
   ]);
 
+  // Landing → sign-in → payment → dashboard (no free access)
+  if (!limits.isPaid) {
+    redirect("/pay");
+  }
+
   const modules = filterModulesByPlan(ctx.modules, limits);
 
   return (
@@ -27,8 +33,6 @@ async function Shell({ children }: { children: ReactNode }) {
       businessLogoUrl={business.logoUrl}
       userName={ctx.user.name}
       modules={modules}
-      planLocked={limits.trialExpired && !limits.isPaid}
-      trialDaysLeft={limits.trialDaysLeft}
     >
       {children}
     </AppShell>

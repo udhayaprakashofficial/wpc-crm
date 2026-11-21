@@ -5,6 +5,8 @@ import {
   setSessionCookie,
   verifyPassword,
 } from "@/lib/auth";
+import { getBusinessPlanLimits } from "@/lib/plan-limits";
+import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 import { signinSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
@@ -30,10 +32,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const membership = await prisma.membership.findFirst({
+    let membership = await prisma.membership.findFirst({
       where: { userId: user.id, isActive: true, deletedAt: null },
       orderBy: { createdAt: "asc" },
     });
+
+    if (!membership) {
+      const workspace = await provisionDefaultWorkspace({
+        userId: user.id,
+        ownerName: user.name,
+      });
+      membership = await prisma.membership.findFirst({
+        where: {
+          userId: user.id,
+          businessId: workspace.businessId,
+          deletedAt: null,
+        },
+      });
+    }
 
     const token = await createSessionToken({
       id: user.id,
@@ -44,12 +60,19 @@ export async function POST(request: Request) {
     });
     await setSessionCookie(token);
 
+    let needsPayment = true;
+    if (membership?.businessId) {
+      const limits = await getBusinessPlanLimits(membership.businessId);
+      needsPayment = !limits.isPaid;
+    }
+
     return NextResponse.json({
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
-        needsOnboarding: !membership,
+        needsOnboarding: false,
+        needsPayment,
       },
     });
   } catch (error) {

@@ -258,9 +258,9 @@ async function PortfolioContent({
                 </Button>
               </Link>
             ) : (
-              <Link href="/app/settings/billing">
+              <Link href="/pay">
                 <Button type="button" variant="secondary">
-                  Upgrade to edit · ₹1,749/yr
+                  Choose a plan
                 </Button>
               </Link>
             )}
@@ -480,14 +480,13 @@ async function PortfolioContent({
             </>
           ) : (
             <p className="mt-5 border-t border-zinc-100 pt-4 text-sm text-zinc-600">
-              View only on Free.{" "}
+              Portfolio edits need an active subscription.{" "}
               <Link
-                href="/app/settings/billing"
-                className="font-semibold text-emerald-800 underline"
+                href="/pay"
+                className="font-semibold text-indigo-700 underline"
               >
-                Upgrade to Pro
-              </Link>{" "}
-              to edit values or import campaigns.
+                Choose a plan
+              </Link>
             </p>
           )}
         </section>
@@ -500,7 +499,7 @@ async function PortfolioContent({
           <p className="mt-1 max-w-sm text-sm text-zinc-500">
             {canWrite
               ? "Add a client or import a campaign report to start tracking performance."
-              : "Portfolio is view-only on Free after trial. Upgrade to Pro to add clients and import campaigns."}
+              : "Portfolio edits require an active subscription."}
           </p>
           <div className="mt-5 flex gap-2">
             {canWrite ? (
@@ -517,8 +516,8 @@ async function PortfolioContent({
                 ) : null}
               </>
             ) : (
-              <Link href="/app/settings/billing">
-                <Button type="button">Upgrade to Pro · ₹1,749/yr</Button>
+              <Link href="/pay">
+                <Button type="button">Choose a plan</Button>
               </Link>
             )}
           </div>

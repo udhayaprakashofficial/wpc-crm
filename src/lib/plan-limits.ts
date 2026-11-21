@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import {
   ALL_FEATURES,
   FREE_FOREVER_FEATURES,
-  FREE_TRIAL_FEATURES,
   PLAN_DEFS,
 } from "@/lib/plans";
 import type { CrmModuleKey } from "@/lib/modules";
@@ -15,10 +14,12 @@ export type PlanLimits = {
   planName: string;
   canDeleteContacts: boolean;
   trialDaysLeft: number | null;
+  /** True when the business has no active paid subscription. */
   trialExpired: boolean;
   isPaid: boolean;
-  /** True while Free trial is still running (full access). */
   onTrial: boolean;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: Date | null;
 };
 
 export async function getBusinessPlanLimits(
@@ -33,78 +34,70 @@ export async function getBusinessPlanLimits(
     orderBy: { createdAt: "desc" },
   });
 
-  const fallback = PLAN_DEFS.free_trial;
-  if (!sub) {
+  // No subscription / unpaid — lock product until Razorpay activates a plan
+  if (!sub || sub.plan.pricePaise <= 0) {
     return {
-      maxUsers: fallback.maxUsers,
-      maxContacts: fallback.maxContacts,
-      features: { ...FREE_TRIAL_FEATURES },
-      planCode: fallback.code,
-      planName: fallback.name,
+      maxUsers: 1,
+      maxContacts: 0,
+      features: { ...FREE_FOREVER_FEATURES },
+      planCode: PLAN_DEFS.free_trial.code,
+      planName: "Unpaid",
       canDeleteContacts: false,
-      trialDaysLeft: fallback.trialDays,
-      trialExpired: false,
+      trialDaysLeft: null,
+      trialExpired: true,
       isPaid: false,
-      onTrial: true,
+      onTrial: false,
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
     };
   }
 
-  const isPaid = sub.plan.pricePaise > 0;
   const now = Date.now();
   const end = sub.currentPeriodEnd.getTime();
-  const onTrial = !isPaid && sub.status === "TRIALING" && end >= now;
-  const trialExpired = !isPaid && !onTrial;
-  const trialDaysLeft = onTrial
-    ? Math.max(0, Math.ceil((end - now) / (24 * 60 * 60 * 1000)))
-    : !isPaid
-      ? 0
-      : null;
+  // Keep access while period is active (incl. PAST_DUE retries); lock when expired/cancelled
+  const periodActive = end >= now;
+  const effectivePaid =
+    sub.plan.pricePaise > 0 &&
+    periodActive &&
+    (sub.status === "ACTIVE" || sub.status === "PAST_DUE");
 
-  let features: Record<string, boolean>;
-  if (isPaid) {
-    const stored =
-      sub.plan.features && typeof sub.plan.features === "object"
-        ? (sub.plan.features as Record<string, boolean>)
-        : {};
-    features = { ...ALL_FEATURES, ...stored };
-  } else if (onTrial) {
-    features = { ...FREE_TRIAL_FEATURES };
-  } else {
-    features = { ...FREE_FOREVER_FEATURES };
-  }
+  const stored =
+    sub.plan.features && typeof sub.plan.features === "object"
+      ? (sub.plan.features as Record<string, boolean>)
+      : {};
+  const features = effectivePaid
+    ? { ...ALL_FEATURES, ...stored }
+    : { ...FREE_FOREVER_FEATURES };
 
   return {
     maxUsers: sub.plan.maxUsers,
-    maxContacts: sub.plan.maxContacts,
+    maxContacts: effectivePaid ? sub.plan.maxContacts : 0,
     features,
     planCode: sub.plan.code,
-    planName: isPaid ? sub.plan.name : "Free",
+    planName: effectivePaid ? sub.plan.name : "Unpaid",
     canDeleteContacts: features.canDeleteContacts === true,
-    trialDaysLeft,
-    trialExpired,
-    isPaid,
-    onTrial,
+    trialDaysLeft: null,
+    trialExpired: !effectivePaid,
+    isPaid: effectivePaid,
+    onTrial: false,
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    currentPeriodEnd: sub.currentPeriodEnd,
   };
 }
 
 export function hasFeature(limits: PlanLimits, key: string) {
-  if (limits.isPaid || limits.onTrial) {
+  if (limits.isPaid) {
     return limits.features[key] !== false;
   }
   return limits.features[key] === true;
 }
 
-/** Modules a Free-forever user may still open. */
-export const FREE_FOREVER_MODULES: CrmModuleKey[] = [
-  "leads",
-  "pipeline",
-  "portfolio",
-  "settings",
-];
+/** Modules available before payment (billing / settings only). */
+export const UNPAID_MODULES: CrmModuleKey[] = ["settings"];
 
 export function modulesAllowedByPlan(limits: PlanLimits): CrmModuleKey[] | "all" {
-  if (limits.isPaid || limits.onTrial) return "all";
-  return FREE_FOREVER_MODULES;
+  if (limits.isPaid) return "all";
+  return UNPAID_MODULES;
 }
 
 export function filterModulesByPlan<T extends string>(
@@ -119,14 +112,15 @@ export function filterModulesByPlan<T extends string>(
 
 export async function assertContactLimit(businessId: string) {
   const limits = await getBusinessPlanLimits(businessId);
+  if (!limits.isPaid) {
+    throw new Error("Subscribe to a plan to add contacts.");
+  }
   const count = await prisma.contact.count({
     where: { businessId, deletedAt: null },
   });
   if (count >= limits.maxContacts) {
     throw new Error(
-      limits.trialExpired
-        ? `Free plan allows ${limits.maxContacts} contacts. Upgrade to Pro for more.`
-        : `Contact limit reached (${limits.maxContacts}). Upgrade to add more.`,
+      `Contact limit reached (${limits.maxContacts}). Contact support if you need more.`,
     );
   }
 }
@@ -134,43 +128,36 @@ export async function assertContactLimit(businessId: string) {
 export async function assertCanDeleteContacts(businessId: string) {
   const limits = await getBusinessPlanLimits(businessId);
   if (!limits.canDeleteContacts) {
-    throw new Error(
-      "Deleting contacts is available on Pro. Upgrade to free up slots.",
-    );
+    throw new Error("Subscribe to delete contacts.");
   }
 }
 
 export async function assertFeature(businessId: string, key: string) {
   const limits = await getBusinessPlanLimits(businessId);
   if (!hasFeature(limits, key)) {
-    throw new Error(
-      limits.trialExpired
-        ? "This feature is locked on Free after your trial. Upgrade to Pro."
-        : "This feature is not available on your plan. Upgrade to Pro.",
-    );
+    throw new Error("This feature requires an active subscription. Choose Monthly or Yearly.");
   }
 }
 
 export async function assertPortfolioWrite(businessId: string) {
   const limits = await getBusinessPlanLimits(businessId);
   if (!hasFeature(limits, "portfolioWrite")) {
-    throw new Error(
-      "Portfolio edits are locked on Free. Upgrade to Pro to update campaigns and values.",
-    );
+    throw new Error("Portfolio edits require an active subscription.");
   }
 }
 
 export async function assertPortfolioImport(businessId: string) {
   const limits = await getBusinessPlanLimits(businessId);
   if (!hasFeature(limits, "portfolioImport")) {
-    throw new Error(
-      "Campaign import is locked on Free. Upgrade to Pro to import reports.",
-    );
+    throw new Error("Campaign import requires an active subscription.");
   }
 }
 
 export async function assertUserLimit(businessId: string) {
   const limits = await getBusinessPlanLimits(businessId);
+  if (!limits.isPaid) {
+    throw new Error("Subscribe to invite team members.");
+  }
   const count = await prisma.membership.count({
     where: { businessId, deletedAt: null, isActive: true },
   });

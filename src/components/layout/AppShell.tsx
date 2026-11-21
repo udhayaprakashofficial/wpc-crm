@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ReactNode } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -14,16 +13,12 @@ export function AppShell({
   businessLogoUrl,
   userName,
   modules,
-  planLocked,
-  trialDaysLeft,
   children,
 }: {
   businessName: string;
   businessLogoUrl?: string | null;
   userName: string;
   modules: CrmModuleKey[];
-  planLocked?: boolean;
-  trialDaysLeft?: number | null;
   children: ReactNode;
 }) {
   return (
@@ -61,30 +56,6 @@ export function AppShell({
             </div>
             <SignOutButton />
           </header>
-
-          {planLocked ? (
-            <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950 md:px-8">
-              Trial ended — Free forever: 25 contacts, pipeline, portfolio view
-              only.{" "}
-              <Link
-                href="/app/settings/billing"
-                className="font-semibold underline"
-              >
-                Upgrade to Pro · ₹1,749/yr
-              </Link>
-            </div>
-          ) : trialDaysLeft != null && trialDaysLeft > 0 ? (
-            <div className="shrink-0 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-sm text-emerald-900 md:px-8">
-              Pro trial · {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"}{" "}
-              left.{" "}
-              <Link
-                href="/app/settings/billing"
-                className="font-semibold underline"
-              >
-                See Pro yearly
-              </Link>
-            </div>
-          ) : null}
 
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-28 md:px-8 md:py-7 md:pb-12">
             <div className="mx-auto w-full max-w-6xl">{children}</div>

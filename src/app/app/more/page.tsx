@@ -148,19 +148,8 @@ export default async function MorePage({
 
       {params.denied ? (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          You don’t have access to that area.{" "}
-          {limits.trialExpired
-            ? "Upgrade to Pro, or ask the owner for access."
-            : "Ask the owner to grant it in Team settings."}
-        </p>
-      ) : null}
-
-      {limits.trialExpired && !limits.isPaid ? (
-        <p className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
-          Free forever: leads (25), pipeline, and portfolio view.{" "}
-          <Link href="/app/settings/billing" className="font-semibold text-emerald-800 underline">
-            Upgrade to Pro · ₹1,749/yr
-          </Link>
+          You don’t have access to that area. Ask the owner to grant it in Team
+          settings.
         </p>
       ) : null}
 

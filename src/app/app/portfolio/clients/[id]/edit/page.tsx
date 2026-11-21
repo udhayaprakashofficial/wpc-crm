@@ -20,7 +20,7 @@ export default async function EditPortfolioClientPage({
   const ctx = await requireTenant();
   const limits = await getBusinessPlanLimits(ctx.businessId);
   if (!hasFeature(limits, "portfolioWrite")) {
-    redirect("/app/settings/billing");
+    redirect("/pay");
   }
   const client = await prisma.portfolioClient.findFirst({
     where: { id, businessId: ctx.businessId, deletedAt: null },

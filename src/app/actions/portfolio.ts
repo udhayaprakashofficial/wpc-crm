@@ -152,7 +152,10 @@ export async function updateCampaignMetrics(input: {
     await assertPortfolioWrite(ctx.businessId);
   } catch (e) {
     return {
-      error: e instanceof Error ? e.message : "Portfolio edits locked on Free",
+      error:
+        e instanceof Error
+          ? e.message
+          : "Portfolio edits require an active subscription",
     };
   }
 
@@ -231,7 +234,10 @@ export async function importCampaignReport(formData: FormData) {
     await assertPortfolioImport(ctx.businessId);
   } catch (e) {
     return {
-      error: e instanceof Error ? e.message : "Import locked on Free",
+      error:
+        e instanceof Error
+          ? e.message
+          : "Campaign import requires an active subscription",
     };
   }
 

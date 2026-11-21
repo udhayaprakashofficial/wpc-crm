@@ -6,20 +6,11 @@ import { useState } from "react";
 import { Plus, UserPlus, IndianRupee, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { hasModule, type CrmModuleKey } from "@/lib/modules";
+import { helpEmail, helpMailto, helpWhatsAppUrl } from "@/lib/help";
 
 const HELP_NAME = "Udhayaprakash Mohan";
 const HELP_PHOTO = "/brand/help-udhayaprakash.jpg";
-
-function helpChatUrl() {
-  const raw = process.env.NEXT_PUBLIC_HELP_WHATSAPP?.replace(/\D/g, "") ?? "";
-  const phone = raw.startsWith("91") ? raw : raw ? `91${raw.slice(-10)}` : "";
-  const text = encodeURIComponent(
-    `Hi ${HELP_NAME.split(" ")[0]} — I need help with WPC CRM.`,
-  );
-  return phone
-    ? `https://wa.me/${phone}?text=${text}`
-    : `https://wa.me/?text=${text}`;
-}
+const HELP_MAIL = helpEmail();
 
 export function QuickAddFab({ modules }: { modules: CrmModuleKey[] }) {
   const [open, setOpen] = useState(false);
@@ -42,7 +33,29 @@ export function QuickAddFab({ modules }: { modules: CrmModuleKey[] }) {
             <FabLink href="/app/tasks/new" label="Follow-up" icon={Bell} />
           ) : null}
           <a
-            href={helpChatUrl()}
+            href={helpMailto()}
+            className="flex max-w-[16rem] items-center gap-2.5 rounded-full border border-zinc-200 bg-white py-2 pl-2.5 pr-4 text-sm shadow-md"
+          >
+            <Image
+              src={HELP_PHOTO}
+              alt={HELP_NAME}
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-emerald-100"
+            />
+            <span className="min-w-0 text-left leading-tight">
+              <span className="block text-[11px] font-medium text-emerald-700">
+                Support · Email
+              </span>
+              <span className="block truncate font-semibold text-zinc-900">
+                {HELP_MAIL}
+              </span>
+            </span>
+          </a>
+          <a
+            href={helpWhatsAppUrl(
+              `Hi ${HELP_NAME.split(" ")[0]} — I need help with WPC CRM.`,
+            )}
             target="_blank"
             rel="noopener noreferrer"
             className="flex max-w-[16rem] items-center gap-2.5 rounded-full border border-zinc-200 bg-white py-2 pl-2.5 pr-4 text-sm shadow-md"
@@ -56,7 +69,7 @@ export function QuickAddFab({ modules }: { modules: CrmModuleKey[] }) {
             />
             <span className="min-w-0 text-left leading-tight">
               <span className="block text-[11px] font-medium text-emerald-700">
-                Help chat · Live
+                Help chat · WhatsApp
               </span>
               <span className="block truncate font-semibold text-zinc-900">
                 {HELP_NAME}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 type AuthMode = "signin" | "signup";
@@ -13,6 +13,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -43,8 +44,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         return;
       }
 
-      if (isSignup || data.user?.needsOnboarding) {
-        window.location.href = "/onboarding";
+      if (data.user?.needsPayment !== false) {
+        window.location.href = "/pay";
         return;
       }
       window.location.href = nextPath.startsWith("/app") ? nextPath : "/app";
@@ -56,76 +57,110 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-5">
-      {isSignup && (
-        <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
+      {isSignup ? (
+        <label className="flex flex-col gap-1.5 text-left text-sm font-medium text-slate-700">
           Full name
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
             autoComplete="name"
-            placeholder="Jordan Lee"
+            placeholder="Enter your full name"
+            className="h-11 rounded-xl border-slate-200 bg-white px-3.5"
           />
         </label>
-      )}
-      <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-        Email
+      ) : null}
+
+      <label className="flex flex-col gap-1.5 text-left text-sm font-medium text-slate-700">
+        Email account
         <Input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
           autoComplete="email"
-          placeholder="you@business.com"
-        />
-      </label>
-      <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-        Password
-        <Input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={isSignup ? 8 : 1}
-          autoComplete={isSignup ? "new-password" : "current-password"}
-          placeholder={isSignup ? "At least 8 characters" : "Your password"}
+          placeholder="Enter your email"
+          className="h-11 rounded-xl border-slate-200 bg-white px-3.5"
         />
       </label>
 
-      {error && (
+      <label className="flex flex-col gap-1.5 text-left text-sm font-medium text-slate-700">
+        Password
+        <div className="relative">
+          <Input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={isSignup ? 8 : 1}
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            placeholder={
+              isSignup ? "Create your password" : "Enter your password"
+            }
+            className="h-11 rounded-xl border-slate-200 bg-white px-3.5 pr-11"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </label>
+
+      {error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
-      )}
+      ) : null}
 
-      <Button type="submit" disabled={loading} size="lg">
+      <button
+        type="submit"
+        disabled={loading}
+        className="mt-2 flex h-11 w-full items-center justify-center rounded-xl bg-[#0f172a] text-sm font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+      >
         {loading
           ? isSignup
             ? "Creating…"
             : "Signing in…"
           : isSignup
-            ? "Create account"
-            : "Sign in"}
-      </Button>
-
-      <p className="text-center text-sm text-slate-600">
-        {isSignup ? (
-          <>
-            Already have an account?{" "}
-            <Link href="/signin" className="font-semibold text-blue-600">
-              Sign in
-            </Link>
-          </>
-        ) : (
-          <>
-            New here?{" "}
-            <Link href="/signup" className="font-semibold text-blue-600">
-              Create an account
-            </Link>
-          </>
-        )}
-      </p>
+            ? "Create Account"
+            : "Sign In"}
+      </button>
     </form>
+  );
+}
+
+export function AuthModeLink({ mode }: { mode: AuthMode }) {
+  if (mode === "signup") {
+    return (
+      <>
+        Already have an account?{" "}
+        <Link
+          href="/signin"
+          className="font-semibold text-slate-900 underline underline-offset-2"
+        >
+          Login
+        </Link>
+      </>
+    );
+  }
+  return (
+    <>
+      New here?{" "}
+      <Link
+        href="/signup"
+        className="font-semibold text-slate-900 underline underline-offset-2"
+      >
+        Create account
+      </Link>
+    </>
   );
 }

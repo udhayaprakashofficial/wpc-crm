@@ -1,31 +1,29 @@
 import { prisma } from "@/lib/prisma";
 
-/** Activate / switch a business subscription after a successful Dodo payment. */
+/** Activate / switch a business subscription after a successful Razorpay payment. */
 export async function activateBusinessPlan(input: {
   businessId: string;
   planCode: string;
-  dodoSubscriptionId?: string | null;
-  dodoCustomerId?: string | null;
-  dodoCheckoutSessionId?: string | null;
+  razorpaySubscriptionId?: string | null;
   periodStart?: Date | null;
   periodEnd?: Date | null;
 }) {
   const plan = await prisma.plan.findUnique({
     where: { code: input.planCode },
   });
-  if (!plan || !plan.active) {
-    throw new Error(`Plan not found: ${input.planCode}`);
+  if (!plan || (!plan.active && plan.pricePaise > 0)) {
+    // Allow activating known paid codes even if briefly inactive in edge cases
+    if (!plan) throw new Error(`Plan not found: ${input.planCode}`);
+  }
+  if (plan.pricePaise <= 0) {
+    throw new Error("Free plans are no longer available");
   }
 
   const periodStart = input.periodStart ?? new Date();
   let periodEnd = input.periodEnd ?? null;
   if (!periodEnd) {
     periodEnd = new Date(periodStart);
-    if (plan.pricePaise === 0) {
-      periodEnd.setDate(periodEnd.getDate() + 7);
-    } else {
-      periodEnd.setMonth(periodEnd.getMonth() + plan.intervalMonths);
-    }
+    periodEnd.setMonth(periodEnd.getMonth() + plan.intervalMonths);
   }
 
   const existing = await prisma.subscription.findFirst({
@@ -35,18 +33,12 @@ export async function activateBusinessPlan(input: {
 
   const data = {
     planId: plan.id,
-    status: plan.pricePaise === 0 ? ("TRIALING" as const) : ("ACTIVE" as const),
+    status: "ACTIVE" as const,
     currentPeriodStart: periodStart,
     currentPeriodEnd: periodEnd,
     cancelAtPeriodEnd: false,
-    ...(input.dodoSubscriptionId != null
-      ? { dodoSubscriptionId: input.dodoSubscriptionId }
-      : {}),
-    ...(input.dodoCustomerId != null
-      ? { dodoCustomerId: input.dodoCustomerId }
-      : {}),
-    ...(input.dodoCheckoutSessionId != null
-      ? { dodoCheckoutSessionId: input.dodoCheckoutSessionId }
+    ...(input.razorpaySubscriptionId != null
+      ? { razorpaySubscriptionId: input.razorpaySubscriptionId }
       : {}),
   };
 

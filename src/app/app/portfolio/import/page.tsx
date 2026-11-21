@@ -19,7 +19,7 @@ export default async function PortfolioImportPage({
   const ctx = await requireTenant();
   const limits = await getBusinessPlanLimits(ctx.businessId);
   if (!hasFeature(limits, "portfolioImport")) {
-    redirect("/app/settings/billing");
+    redirect("/pay");
   }
 
   const clients = await prisma.portfolioClient.findMany({

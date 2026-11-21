@@ -30,7 +30,7 @@ export async function completeOnboarding(formData: FormData) {
   });
   if (existing) {
     await refreshSessionForUser(dbUser.id);
-    redirect("/app");
+    redirect("/pay");
   }
 
   const fyRaw = String(formData.get("fyStartMonth") || "4");
@@ -74,24 +74,6 @@ export async function completeOnboarding(formData: FormData) {
   ) {
     slug = `${baseSlug}-${i++}`;
   }
-
-  const { PLAN_DEFS } = await import("@/lib/plans");
-  const freeDef = PLAN_DEFS.free_trial;
-  const freeRow = {
-    code: freeDef.code,
-    name: freeDef.name,
-    pricePaise: freeDef.pricePaise,
-    intervalMonths: freeDef.intervalMonths,
-    maxUsers: freeDef.maxUsers,
-    maxContacts: freeDef.maxContacts,
-    features: { ...freeDef.features },
-    active: true,
-  };
-  const freePlan = await prisma.plan.upsert({
-    where: { code: freeDef.code },
-    update: freeRow,
-    create: freeRow,
-  });
 
   const business = await prisma.$transaction(async (tx) => {
     const created = await tx.business.create({
@@ -157,15 +139,6 @@ export async function completeOnboarding(formData: FormData) {
             },
           ],
         },
-        subscriptions: {
-          create: {
-            planId: freePlan.id,
-            status: "TRIALING",
-            currentPeriodEnd: new Date(
-              Date.now() + freeDef.trialDays * 24 * 60 * 60 * 1000,
-            ),
-          },
-        },
         ...(data.yearlyRevenueGoalRupees
           ? {
               goals: {
@@ -197,5 +170,5 @@ export async function completeOnboarding(formData: FormData) {
 
   await refreshSessionForUser(dbUser.id);
   revalidatePath("/");
-  redirect("/app");
+  redirect("/pay");
 }

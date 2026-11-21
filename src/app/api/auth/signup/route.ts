@@ -5,6 +5,7 @@ import {
   hashPassword,
   setSessionCookie,
 } from "@/lib/auth";
+import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 import { signupSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
@@ -36,17 +37,30 @@ export async function POST(request: Request) {
       data: { name, email: normalizedEmail, passwordHash },
     });
 
+    const workspace = await provisionDefaultWorkspace({
+      userId: user.id,
+      ownerName: user.name,
+    });
+
     const token = await createSessionToken({
       id: user.id,
       name: user.name,
       email: user.email,
-      businessId: null,
-      role: null,
+      businessId: workspace.businessId,
+      role: "OWNER",
     });
     await setSessionCookie(token);
 
     return NextResponse.json(
-      { user: { id: user.id, name: user.name, email: user.email } },
+      {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          needsOnboarding: false,
+          needsPayment: true,
+        },
+      },
       { status: 201 },
     );
   } catch (error) {

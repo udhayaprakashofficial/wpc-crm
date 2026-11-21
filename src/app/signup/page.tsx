@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { AuthForm } from "@/components/AuthForm";
+import { AuthForm, AuthModeLink } from "@/components/AuthForm";
 import { AuthShell } from "@/components/AuthShell";
 
 export const metadata = {
@@ -10,10 +10,14 @@ export const metadata = {
 export default function SignupPage() {
   return (
     <AuthShell
-      title="Create your account"
-      subtitle="Set up access to manage contacts, deals, and follow-ups."
+      title="Get Started Now"
+      subtitle={<AuthModeLink mode="signup" />}
     >
-      <Suspense fallback={<div className="h-48 animate-pulse rounded-lg bg-slate-100" />}>
+      <Suspense
+        fallback={
+          <div className="h-48 animate-pulse rounded-xl bg-slate-100" />
+        }
+      >
         <AuthForm mode="signup" />
       </Suspense>
     </AuthShell>

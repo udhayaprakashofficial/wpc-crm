@@ -40,22 +40,26 @@ export async function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/app") && authenticated && !session.businessId) {
     const url = request.nextUrl.clone();
-    url.pathname = "/onboarding";
+    url.pathname = "/pay";
     return NextResponse.redirect(url);
   }
 
   // Allow /signin even with a cookie so users can recover from stale sessions
   // (cookie may reference an old DB). AuthForm / requireTenant will clear it.
 
-  if (pathname === "/onboarding" && !authenticated) {
+  if (pathname === "/onboarding") {
     const url = request.nextUrl.clone();
-    url.pathname = "/signin";
+    url.pathname = authenticated ? "/pay" : "/signin";
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/onboarding" && authenticated && session.businessId) {
+  if (
+    (pathname === "/pay" || pathname.startsWith("/pay/")) &&
+    !authenticated
+  ) {
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
+    url.pathname = "/signin";
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
@@ -63,5 +67,12 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/signin", "/signup", "/onboarding"],
+  matcher: [
+    "/app/:path*",
+    "/signin",
+    "/signup",
+    "/onboarding",
+    "/pay",
+    "/pay/:path*",
+  ],
 };

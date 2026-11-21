@@ -36,20 +36,20 @@ async function main() {
     };
   }
 
-  const freePlan = await prisma.plan.upsert({
+  // Free / trial retired
+  await prisma.plan.upsert({
     where: { code: PLAN_DEFS.free_trial.code },
-    update: planRow(PLAN_DEFS.free_trial),
-    create: planRow(PLAN_DEFS.free_trial),
+    update: planRow(PLAN_DEFS.free_trial, false),
+    create: planRow(PLAN_DEFS.free_trial, false),
   });
 
-  // Monthly retired — keep row for legacy subs, marked inactive
   await prisma.plan.upsert({
     where: { code: PLAN_DEFS.paid_monthly.code },
-    update: planRow(PLAN_DEFS.paid_monthly, false),
-    create: planRow(PLAN_DEFS.paid_monthly, false),
+    update: planRow(PLAN_DEFS.paid_monthly),
+    create: planRow(PLAN_DEFS.paid_monthly),
   });
 
-  await prisma.plan.upsert({
+  const yearlyPlan = await prisma.plan.upsert({
     where: { code: PLAN_DEFS.paid_yearly.code },
     update: planRow(PLAN_DEFS.paid_yearly),
     create: planRow(PLAN_DEFS.paid_yearly),
@@ -93,10 +93,10 @@ async function main() {
       },
       subscriptions: {
         create: {
-          planId: freePlan.id,
-          status: "TRIALING",
+          planId: yearlyPlan.id,
+          status: "ACTIVE",
           currentPeriodEnd: new Date(
-            Date.now() + PLAN_DEFS.free_trial.trialDays * 24 * 60 * 60 * 1000,
+            Date.now() + 365 * 24 * 60 * 60 * 1000,
           ),
         },
       },
@@ -248,7 +248,11 @@ async function main() {
     console.log("Seeded 3 demo supply items");
   }
 
-  console.log("Seeded plan:", freePlan.code);
+  console.log(
+    "Seeded plans:",
+    PLAN_DEFS.paid_monthly.code,
+    PLAN_DEFS.paid_yearly.code,
+  );
   console.log("Seeded owner: owner@demo.wpc / password123");
   console.log("Seeded business:", business.slug);
 }
