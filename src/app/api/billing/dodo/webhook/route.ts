@@ -5,8 +5,6 @@ import { envProductIdForPlan } from "@/lib/dodo";
 import { PLAN_DEFS } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
 
-export const runtime = "nodejs";
-
 type DodoEvent = {
   type?: string;
   data?: Record<string, unknown>;
