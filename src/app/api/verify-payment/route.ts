@@ -9,7 +9,7 @@ import {
 } from "@/lib/razorpay";
 import { PLAN_DEFS } from "@/lib/plans";
 
-const PAID_CODES = new Set([
+const PAID_CODES: ReadonlySet<string> = new Set([
   PLAN_DEFS.paid_monthly.code,
   PLAN_DEFS.paid_yearly.code,
 ]);

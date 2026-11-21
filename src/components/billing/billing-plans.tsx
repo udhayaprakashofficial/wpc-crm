@@ -72,7 +72,6 @@ export function BillingPlans({
       ) : (
         <p className="text-xs text-zinc-500">
           Razorpay Subscriptions · auto-renews each cycle · cancel anytime.
-          Test card: 4111 1111 1111 1111.
         </p>
       )}
 
