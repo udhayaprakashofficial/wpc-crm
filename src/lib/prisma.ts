@@ -81,4 +81,14 @@ function getClient() {
   return client;
 }
 
-export const prisma = getClient();
+/**
+ * Lazy client — import must not throw during `next build` when DATABASE_URL
+ * is unset (route collection). Connection is created on first use at runtime.
+ */
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, _receiver) {
+    const client = getClient();
+    const value = Reflect.get(client, prop, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

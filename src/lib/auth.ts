@@ -1,8 +1,12 @@
 import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { COOKIE_NAME, SESSION_DURATION } from "@/lib/session";
+import { SESSION_DURATION } from "@/lib/session";
+import {
+  clearSessionCookie,
+  readSessionToken,
+  setSessionCookie,
+} from "@/lib/session-cookie";
 import type { Role } from "@/generated/prisma/client";
 
 export type SessionUser = {
@@ -12,6 +16,8 @@ export type SessionUser = {
   businessId: string | null;
   role: Role | null;
 };
+
+export { clearSessionCookie, setSessionCookie };
 
 function getSecret() {
   const secret = process.env.AUTH_SECRET;
@@ -41,32 +47,8 @@ export async function createSessionToken(user: SessionUser) {
     .sign(getSecret());
 }
 
-export async function setSessionCookie(token: string) {
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_DURATION,
-  });
-}
-
-export async function clearSessionCookie() {
-  const cookieStore = await cookies();
-  // Expire with the same attributes used at set — bare delete can leave the cookie.
-  cookieStore.set(COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
-}
-
 export async function getSession(): Promise<SessionUser | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
+  const token = await readSessionToken();
   if (!token) return null;
 
   try {
