@@ -7,7 +7,7 @@ import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 import { PaymentShell } from "@/components/layout/PaymentShell";
 import { BillingPlans } from "@/components/billing/billing-plans";
 
-export const instant = false;
+export const dynamic = "force-dynamic";
 
 export default async function PayPage() {
   const session = await getSession();
