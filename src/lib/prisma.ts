@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
 /** Bump when schema adds fields/models that a hot-reloaded client must pick up. */
-const PRISMA_SCHEMA_REV = 11;
+const PRISMA_SCHEMA_REV = 12;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -11,13 +11,57 @@ const globalForPrisma = globalThis as unknown as {
   prismaSchemaRev: number | undefined;
 };
 
-function createPrismaClient() {
-  // Prefer pooled URL on serverless (Vercel); fall back to direct DATABASE_URL.
-  const connectionString =
-    process.env.DATABASE_POOL_URL || process.env.DATABASE_URL;
-  if (!connectionString) {
+/**
+ * Supabase `db.<ref>.supabase.co` is often IPv6-only. Vercel cannot reach it.
+ * Map known projects (and optional SUPABASE_POOLER_HOST) to the IPv4 pooler.
+ */
+const SUPABASE_POOLER_BY_REF: Record<string, string> = {
+  jtrkngxqghzpngwemkwc: "aws-1-ap-southeast-1.pooler.supabase.com",
+};
+
+function resolveConnectionString(): string {
+  if (process.env.DATABASE_POOL_URL) {
+    return process.env.DATABASE_POOL_URL;
+  }
+
+  const configured = process.env.DATABASE_URL;
+  if (!configured) {
     throw new Error("DATABASE_URL is not set");
   }
+
+  const onServerless = Boolean(
+    process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.FORCE_SUPABASE_POOLER === "1",
+  );
+  if (!onServerless) return configured;
+
+  try {
+    const u = new URL(configured);
+    if (u.hostname.includes("pooler.supabase.com")) {
+      return configured;
+    }
+
+    const refMatch = u.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+    if (!refMatch) return configured;
+
+    const ref = refMatch[1];
+    const poolerHost =
+      process.env.SUPABASE_POOLER_HOST || SUPABASE_POOLER_BY_REF[ref];
+    if (!poolerHost) return configured;
+
+    u.hostname = poolerHost;
+    u.port = "6543";
+    u.username = `postgres.${ref}`;
+    u.searchParams.set("pgbouncer", "true");
+    return u.toString();
+  } catch {
+    return configured;
+  }
+}
+
+function createPrismaClient() {
+  const connectionString = resolveConnectionString();
 
   const useSsl =
     connectionString.includes("supabase.co") ||
@@ -32,8 +76,6 @@ function createPrismaClient() {
     globalForPrisma.pgPool = new Pool({
       connectionString,
       ssl: useSsl ? { rejectUnauthorized: false } : false,
-      // Serverless: keep a single connection per isolate to avoid exhausting
-      // Supabase/Postgres connection limits on every warm request.
       max: isServerless ? 1 : 10,
       idleTimeoutMillis: isServerless ? 10_000 : 30_000,
       connectionTimeoutMillis: 15_000,

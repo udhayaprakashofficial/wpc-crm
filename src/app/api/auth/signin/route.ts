@@ -9,8 +9,24 @@ import { getBusinessPlanLimits } from "@/lib/plan-limits";
 import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 import { signinSchema } from "@/lib/validations";
 
+function errorText(error: unknown): string {
+  if (!error) return "";
+  if (error instanceof Error) {
+    const cause =
+      error.cause instanceof Error
+        ? error.cause.message
+        : typeof error.cause === "string"
+          ? error.cause
+          : "";
+    const meta = (error as unknown as { meta?: { message?: string } }).meta;
+    const nested = typeof meta?.message === "string" ? meta.message : "";
+    return [error.message, cause, nested].filter(Boolean).join(" | ");
+  }
+  return String(error);
+}
+
 function configErrorMessage(error: unknown): string | null {
-  const msg = error instanceof Error ? error.message : String(error ?? "");
+  const msg = errorText(error);
   if (/AUTH_SECRET is not set/i.test(msg)) {
     return "Server misconfigured (AUTH_SECRET). Add it in your host env and redeploy.";
   }
@@ -18,11 +34,11 @@ function configErrorMessage(error: unknown): string | null {
     return "Server misconfigured (DATABASE_URL). Add it in your host env and redeploy.";
   }
   if (
-    /password authentication failed|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection.*refused|too many clients|MaxClients|Timeout/i.test(
+    /password authentication failed|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|connection.*refused|too many clients|MaxClients|Timeout|Can't reach database|P1001|P1017|Tenant or user not found|self-signed certificate/i.test(
       msg,
     )
   ) {
-    return "Cannot reach the database. Check DATABASE_URL / DATABASE_POOL_URL (use Supabase pooler on port 6543 for Vercel).";
+    return "Cannot reach the database from this host. On Vercel use the Supabase Transaction pooler URL (port 6543, host aws-*-*.pooler.supabase.com), not the direct db.*.supabase.co host.";
   }
   return null;
 }
@@ -97,7 +113,10 @@ export async function POST(request: Request) {
     console.error("Signin error:", error);
     const configError = configErrorMessage(error);
     return NextResponse.json(
-      { error: configError ?? "Something went wrong. Please try again." },
+      {
+        error: configError ?? "Something went wrong. Please try again.",
+        detail: errorText(error).slice(0, 300) || undefined,
+      },
       { status: 500 },
     );
   }
