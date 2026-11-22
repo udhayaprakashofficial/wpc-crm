@@ -8,7 +8,7 @@ import {
   getBusinessPlanLimits,
 } from "@/lib/plan-limits";
 
-export const instant = false;
+export const dynamic = "force-dynamic";
 
 async function Shell({ children }: { children: ReactNode }) {
   const ctx = await requireTenant();

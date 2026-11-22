@@ -68,6 +68,7 @@ function NavItem({
   return (
     <Link
       href={href}
+      prefetch
       className={cn(
         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
         active

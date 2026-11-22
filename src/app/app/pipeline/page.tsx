@@ -4,13 +4,17 @@ import { prisma } from "@/lib/prisma";
 import {
   contactVisibilityFilter,
   dealVisibilityFilter,
+  requireModule,
   requireTenant,
 } from "@/lib/tenant";
 import { PipelineBoard } from "@/components/pipeline/PipelineBoard";
 import { PageHeader } from "@/components/ui/page-header";
 
+export const dynamic = "force-dynamic";
+
 async function Board() {
   const ctx = await requireTenant();
+  requireModule(ctx, "pipeline");
   const recentCutoff = subDays(new Date(), 60);
 
   const [stages, openDeals, closedDeals, contacts] = await Promise.all([
