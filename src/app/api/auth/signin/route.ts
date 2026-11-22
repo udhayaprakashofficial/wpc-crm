@@ -2,12 +2,30 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   createSessionToken,
-  setSessionCookie,
   verifyPassword,
 } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/session-cookie";
 import { getBusinessPlanLimits } from "@/lib/plan-limits";
 import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 import { signinSchema } from "@/lib/validations";
+
+function configErrorMessage(error: unknown): string | null {
+  const msg = error instanceof Error ? error.message : String(error ?? "");
+  if (/AUTH_SECRET is not set/i.test(msg)) {
+    return "Server misconfigured (AUTH_SECRET). Add it in your host env and redeploy.";
+  }
+  if (/DATABASE_URL is not set/i.test(msg)) {
+    return "Server misconfigured (DATABASE_URL). Add it in your host env and redeploy.";
+  }
+  if (
+    /password authentication failed|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|connection.*refused|too many clients|MaxClients|Timeout/i.test(
+      msg,
+    )
+  ) {
+    return "Cannot reach the database. Check DATABASE_URL / DATABASE_POOL_URL (use Supabase pooler on port 6543 for Vercel).";
+  }
+  return null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -58,7 +76,6 @@ export async function POST(request: Request) {
       businessId: membership?.businessId ?? null,
       role: membership?.role ?? null,
     });
-    await setSessionCookie(token);
 
     let needsPayment = true;
     if (membership?.businessId) {
@@ -66,7 +83,7 @@ export async function POST(request: Request) {
       needsPayment = !limits.isPaid;
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: user.id,
         name: user.name,
@@ -75,10 +92,12 @@ export async function POST(request: Request) {
         needsPayment,
       },
     });
+    return applySessionCookie(response, token);
   } catch (error) {
     console.error("Signin error:", error);
+    const configError = configErrorMessage(error);
     return NextResponse.json(
-      { error: "Something went wrong. Please try again." },
+      { error: configError ?? "Something went wrong. Please try again." },
       { status: 500 },
     );
   }

@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  createSessionToken,
-  hashPassword,
-  setSessionCookie,
-} from "@/lib/auth";
+import { createSessionToken, hashPassword } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/session-cookie";
 import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 import { signupSchema } from "@/lib/validations";
 
@@ -49,9 +46,8 @@ export async function POST(request: Request) {
       businessId: workspace.businessId,
       role: "OWNER",
     });
-    await setSessionCookie(token);
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         user: {
           id: user.id,
@@ -63,6 +59,7 @@ export async function POST(request: Request) {
       },
       { status: 201 },
     );
+    return applySessionCookie(response, token);
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json(

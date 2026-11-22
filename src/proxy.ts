@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { COOKIE_NAME } from "@/lib/session";
 
-function getSecret() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error("AUTH_SECRET is not set");
-  return new TextEncoder().encode(secret);
-}
-
 type Claims = {
   businessId?: string | null;
 };
@@ -15,8 +9,13 @@ type Claims = {
 async function readSession(request: NextRequest): Promise<Claims | null> {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   if (!token) return null;
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    const { payload } = await jwtVerify(
+      token,
+      new TextEncoder().encode(secret),
+    );
     return {
       businessId:
         typeof payload.businessId === "string" ? payload.businessId : null,

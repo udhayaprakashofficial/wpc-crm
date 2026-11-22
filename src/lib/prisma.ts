@@ -12,27 +12,35 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
+  // Prefer pooled URL on serverless (Vercel); fall back to direct DATABASE_URL.
+  const connectionString =
+    process.env.DATABASE_POOL_URL || process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
   }
 
   const useSsl =
     connectionString.includes("supabase.co") ||
-    connectionString.includes("pooler.supabase.com");
+    connectionString.includes("pooler.supabase.com") ||
+    connectionString.includes("prisma.io");
 
-  const pool =
-    globalForPrisma.pgPool ??
-    new Pool({
+  const isServerless = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME,
+  );
+
+  if (!globalForPrisma.pgPool) {
+    globalForPrisma.pgPool = new Pool({
       connectionString,
       ssl: useSsl ? { rejectUnauthorized: false } : false,
+      // Serverless: keep a single connection per isolate to avoid exhausting
+      // Supabase/Postgres connection limits on every warm request.
+      max: isServerless ? 1 : 10,
+      idleTimeoutMillis: isServerless ? 10_000 : 30_000,
+      connectionTimeoutMillis: 15_000,
     });
-
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.pgPool = pool;
   }
 
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg(globalForPrisma.pgPool);
   return new PrismaClient({ adapter });
 }
 
@@ -71,9 +79,6 @@ function getClient() {
 
   if (!client || staleRev || missingDelegates || missingSchemaFields) {
     client = createPrismaClient();
-  }
-
-  if (process.env.NODE_ENV !== "production") {
     globalForPrisma.prisma = client;
     globalForPrisma.prismaSchemaRev = PRISMA_SCHEMA_REV;
   }
@@ -84,6 +89,7 @@ function getClient() {
 /**
  * Lazy client — import must not throw during `next build` when DATABASE_URL
  * is unset (route collection). Connection is created on first use at runtime.
+ * Always reuse the client/pool on globalThis (including production).
  */
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, _receiver) {

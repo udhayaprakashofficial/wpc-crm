@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { clearSessionCookie } from "@/lib/session-cookie";
+import { clearSessionCookieOn } from "@/lib/session-cookie";
 
 export async function POST() {
-  await clearSessionCookie();
-  return NextResponse.json(
+  const response = NextResponse.json(
     { message: "Signed out successfully" },
     {
       headers: {
@@ -11,4 +10,5 @@ export async function POST() {
       },
     },
   );
+  return clearSessionCookieOn(response);
 }
