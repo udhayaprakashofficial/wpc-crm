@@ -260,10 +260,14 @@ export function RazorpaySubscribeButton({
       } catch (subErr) {
         const msg = subErr instanceof Error ? subErr.message : String(subErr);
         const code = (subErr as Error & { code?: string }).code;
-        // No plan_id mapped → one-time order fallback
+        // Subscription plan missing/wrong account → Standard Orders (same keys, no plan_id)
         if (
           code === "missing_plan_id" ||
-          /missing razorpay plan|plan id/i.test(msg)
+          code === "invalid_plan_id" ||
+          code === "plan_fetch_failed" ||
+          /missing razorpay plan|plan id|invalid or could not be found|not found for this api key/i.test(
+            msg,
+          )
         ) {
           await payWithOrder();
           return;

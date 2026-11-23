@@ -5,10 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/tenant";
 import { activateBusinessPlan } from "@/lib/billing-activate";
 import {
-  envRazorpayPlanId,
   getRazorpayClient,
   razorpayConfigured,
   razorpayKeyId,
+  resolveRazorpayPlanId,
   totalCountForPlan,
   verifySubscriptionPaymentSignature,
 } from "@/lib/razorpay";
@@ -41,8 +41,7 @@ export async function createRazorpaySubscription(
     throw new Error("Invalid paid plan");
   }
 
-  const rzPlanId =
-    plan.razorpayPlanId?.trim() || envRazorpayPlanId(plan.code);
+  const rzPlanId = resolveRazorpayPlanId(plan.code, plan.razorpayPlanId);
   if (!rzPlanId) {
     throw new Error(
       `Missing Razorpay plan id for ${plan.code}. Set RAZORPAY_PLAN_MONTHLY / RAZORPAY_PLAN_YEARLY.`,

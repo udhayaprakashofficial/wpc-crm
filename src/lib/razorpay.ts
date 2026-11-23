@@ -16,10 +16,15 @@ export function razorpayConfigured() {
   );
 }
 
+/**
+ * Key id used for Checkout MUST match the account that created the
+ * order/subscription. Prefer the server RAZORPAY_KEY_ID (same as getRazorpayClient).
+ * Mismatched NEXT_PUBLIC_* keys cause: "The ID provided is invalid or could not be found."
+ */
 export function razorpayKeyId() {
   return (
-    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() ||
     process.env.RAZORPAY_KEY_ID?.trim() ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() ||
     ""
   );
 }
@@ -35,7 +40,18 @@ export function getRazorpayClient() {
   return new Razorpay({ key_id, key_secret });
 }
 
-/** Map plan codes → Razorpay Plan ids (env first, then Plan.razorpayPlanId). */
+/**
+ * Resolve plan id: env wins over DB so stale Plan.razorpayPlanId cannot
+ * point Checkout at another Razorpay account.
+ */
+export function resolveRazorpayPlanId(
+  planCode: string,
+  dbPlanId?: string | null,
+): string | null {
+  return envRazorpayPlanId(planCode) || dbPlanId?.trim() || null;
+}
+
+/** Map plan codes → Razorpay Plan ids from env. */
 export function envRazorpayPlanId(planCode: string): string | null {
   if (planCode === PLAN_DEFS.paid_monthly.code) {
     return process.env.RAZORPAY_PLAN_MONTHLY?.trim() || null;

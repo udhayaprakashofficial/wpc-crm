@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import {
-  envRazorpayPlanId,
   getRazorpayClient,
   razorpayConfigured,
   razorpayKeyId,
+  resolveRazorpayPlanId,
   totalCountForPlan,
 } from "@/lib/razorpay";
 import { PLAN_DEFS } from "@/lib/plans";
@@ -106,8 +106,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Plan unavailable" }, { status: 400 });
     }
 
-    const rzPlanId =
-      plan.razorpayPlanId?.trim() || envRazorpayPlanId(plan.code);
+    const rzPlanId = resolveRazorpayPlanId(plan.code, plan.razorpayPlanId);
     if (!rzPlanId) {
       return NextResponse.json(
         {
@@ -124,6 +123,26 @@ export async function POST(request: Request) {
     });
 
     const client = getRazorpayClient();
+
+    // Fail fast with a clear code when plan_id is from another Razorpay account
+    try {
+      await client.plans.fetch(rzPlanId);
+    } catch (e) {
+      const description = razorpayErrorMessage(e);
+      const invalid = /invalid|not found|does not exist|no such/i.test(
+        description,
+      );
+      return NextResponse.json(
+        {
+          error: invalid
+            ? `Razorpay plan ${rzPlanId} was not found for this API key. Use plan ids from the same Razorpay account as RAZORPAY_KEY_ID, or clear RAZORPAY_PLAN_* to use one-time Orders.`
+            : description,
+          code: invalid ? "invalid_plan_id" : "plan_fetch_failed",
+        },
+        { status: 400 },
+      );
+    }
+
     const subscription = await client.subscriptions.create({
       plan_id: rzPlanId,
       total_count: totalCountForPlan(plan.intervalMonths),
