@@ -1,11 +1,14 @@
+import path from "path";
 import type { NextConfig } from "next";
 
+const projectRoot = path.join(__dirname);
+
 const nextConfig: NextConfig = {
-  // Cookie-auth CRM routes need full request-time RSC payloads.
-  // partialPrefetching + cacheComponents were serving empty /app/*.rsc
-  // shells (0 bytes), so client navigations showed "This page couldn’t load".
+  // Pin workspace root so Vercel’s modifyConfig adapter gets a real path
+  // (avoids ERR_INVALID_ARG_TYPE from undefined root autodetection).
+  outputFileTracingRoot: projectRoot,
   turbopack: {
-    root: process.cwd(),
+    root: projectRoot,
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

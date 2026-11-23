@@ -7,8 +7,6 @@ import { getSession } from "@/lib/auth";
 import { formatINR } from "@/lib/money";
 import { suspendBusiness, reactivateBusiness } from "@/app/actions/admin";
 
-export const instant = false;
-
 async function AdminContent() {
   const session = await getSession();
   if (!session) redirect("/signin");

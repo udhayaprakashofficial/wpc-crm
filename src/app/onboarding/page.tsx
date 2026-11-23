@@ -3,7 +3,6 @@ import { getSession, refreshSessionForUser } from "@/lib/auth";
 import { provisionDefaultWorkspace } from "@/lib/provision-workspace";
 
 export const metadata = { title: "Set up your business · WPC CRM" };
-export const instant = false;
 
 /** Legacy route — workspaces are created on signup/signin; send users to pay. */
 export default async function OnboardingPage() {

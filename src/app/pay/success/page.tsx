@@ -11,7 +11,7 @@ export const metadata = {
   description: "Your WPC CRM subscription is active.",
 };
 
-export const instant = false;
+export const dynamic = "force-dynamic";
 
 /**
  * Stable conversion URL for ad pixels (e.g. Facebook / Meta).
